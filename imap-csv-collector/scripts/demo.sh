@@ -7,6 +7,9 @@
 #   4. 邮箱重建（UIDVALIDITY 改变、UID 重排）-> 整箱重扫，重投全部跳过
 #   5. 同 Message-ID 但附件被改 -> 停采待核实，原结果保留
 # 用法： bash scripts/demo.sh
+# 注意：该演示以“首轮采集停在 UID3”为前提，建议先执行
+#   curl -X POST localhost:8000/admin/reset
+# 再做一次全新采集；统一规则演示见 scripts/demo_unified.sh。
 set -euo pipefail
 
 API="${API:-http://localhost:8000}"

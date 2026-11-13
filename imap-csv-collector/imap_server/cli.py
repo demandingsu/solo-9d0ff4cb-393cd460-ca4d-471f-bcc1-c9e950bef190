@@ -7,6 +7,7 @@
   replace-uid           用修复后的 CSV 重写指定 UID 的邮件
   redeliver             以新 UID 重投指定邮件（附件原样）
   redeliver-modified    以新 UID 重投同 Message-ID 但替换附件内容的邮件
+  redeliver-new         用给定 CSV 生成一封全新 Message-ID 的邮件并投递
   rebuild               模拟邮箱重建：更换 UIDVALIDITY 并把 UID 从 1 重排
 """
 from __future__ import annotations
@@ -95,6 +96,19 @@ def cmd_redeliver_modified(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_redeliver_new(args: argparse.Namespace) -> None:
+    payload = _load_attachment_bytes(args.csv_path)
+    raw = mailbox.build_message(
+        message_id=args.message_id,
+        subject=args.subject,
+        sender="instrument-c@lab.local",
+        recipient="lab@lab.local",
+        attachments=[(args.attachment, payload)],
+    )
+    new_uid = mailbox.append_message(args.root, args.folder, raw)
+    print(f"已投递新邮件 Message-ID={args.message_id}，新 UID={new_uid}")
+
+
 def cmd_rebuild(args: argparse.Namespace) -> None:
     new_validity = args.uidvalidity or int(time.time())
     mailbox.reset_uidvalidity(args.root, args.folder, new_validity)
@@ -143,6 +157,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_modified.add_argument("--attachment", required=True)
     p_modified.add_argument("--csv-path", required=True)
     p_modified.set_defaults(func=cmd_redeliver_modified)
+
+    p_new = sub.add_parser(
+        "redeliver-new", help="用给定 CSV 投递一封全新 Message-ID 的邮件"
+    )
+    p_new.add_argument("--message-id", required=True)
+    p_new.add_argument("--attachment", default="batch.csv")
+    p_new.add_argument("--csv-path", required=True)
+    p_new.add_argument("--subject", default="仪器结果（演示新邮件）")
+    p_new.set_defaults(func=cmd_redeliver_new)
 
     p_rebuild = sub.add_parser("rebuild", help="模拟邮箱重建（换 UIDVALIDITY）")
     p_rebuild.add_argument("--uidvalidity", type=int, default=0)

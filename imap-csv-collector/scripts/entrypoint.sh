@@ -7,6 +7,9 @@ case "${1:-api}" in
     exec uvicorn app.main:app --host 0.0.0.0 --port 8000
     ;;
   imap)
+    if [ "${MAIL_SEED_UNIFIED:-0}" = "1" ]; then
+      python /app/scripts/seed_unified.py || true
+    fi
     exec python -m imap_server.cli serve \
       --host 0.0.0.0 --port 10143 \
       --root "${MAIL_ROOT:-/srv/mail}" \

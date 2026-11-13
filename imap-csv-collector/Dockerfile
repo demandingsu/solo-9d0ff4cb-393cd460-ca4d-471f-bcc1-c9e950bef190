@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app /app/app
 COPY imap_server /app/imap_server
+COPY scripts/seed_unified.py /app/scripts/seed_unified.py
 
 RUN mkdir -p /data /srv/mail
 

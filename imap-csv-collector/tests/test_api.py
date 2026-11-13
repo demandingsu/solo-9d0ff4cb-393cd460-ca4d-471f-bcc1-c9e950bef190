@@ -46,3 +46,25 @@ def test_full_api_flow(imap_server, db_path):
     # 请求体校验：端口越界
     bad = dict(payload, port=70000)
     assert client.post("/collect", json=bad).status_code == 422
+
+
+def test_unified_endpoint_available_before_any_rule(imap_server, db_path):
+    host, port, _root = imap_server
+    client = TestClient(app)
+    payload = {
+        "host": host,
+        "port": port,
+        "folder": "INBOX",
+        "username": USER,
+        "password": PASSWORD,
+        "use_ssl": False,
+    }
+    client.post("/collect", json=payload)
+
+    # 尚未发布规则：统一查询仍返回完整视图（0 号空规则集，全部待核实）
+    body = client.get("/unified/results/S-1001").json()
+    assert body["rule_set_id"] == 0
+    assert body["pending_count"] == body["count"]
+    assert {row["reason"] for row in body["results"]} == {"no_rule"}
+    assert all(row["source_result"] == row["result"] for row in body["results"])
+    assert all(row["message_id"] for row in body["results"])

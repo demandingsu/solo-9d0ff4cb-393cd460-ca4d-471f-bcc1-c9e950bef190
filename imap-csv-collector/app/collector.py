@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from email.message import Message
 from typing import Any
 
-from . import db
+from . import db, rules
 from .csv_parse import CsvError, parse_csv
 
 # 单次 FETCH 的规模控制（逐个拉取，失败边界即单封邮件）
@@ -222,20 +222,21 @@ def collect(
     mailbox_key = make_mailbox_key(host, port, folder)
     conn = db.connect(db_path)
     db.init_db(conn)
-    # 同一进程内串行化采集，避免两个请求并发推进同一邮箱进度
-    with db._ingest_lock:
-        report = _collect_locked(
-            conn=conn,
-            mailbox_key=mailbox_key,
-            host=host,
-            port=port,
-            folder=folder,
-            username=username,
-            password=password,
-            use_ssl=use_ssl,
-        )
-    conn.close()
-    return report
+    try:
+        # 同一进程内串行化采集，避免两个请求并发推进同一邮箱进度
+        with db.ingest_lock:
+            return _collect_locked(
+                conn=conn,
+                mailbox_key=mailbox_key,
+                host=host,
+                port=port,
+                folder=folder,
+                username=username,
+                password=password,
+                use_ssl=use_ssl,
+            )
+    finally:
+        conn.close()
 
 
 def _collect_locked(
@@ -353,10 +354,24 @@ def _collect_locked(
                     for _, records in parsed
                     for record in records
                 ]
-                # 检测记录 + 投递识别 + UID 进度 同一事务原子提交
-                with db.transaction(conn):
-                    db.insert_results(
+                # 检测记录 + 统一结果 + 投递识别 + UID 进度 同一事务原子提交。
+                # 规则集指针与规则映射都在此事务内读取：若规则发布刚好在
+                # 此提交，采集要么看到旧规则集（被发布方最终补扫），要么
+                # 看到新规则集，不会出现“原始记录已入库但统一结果缺失”。
+                with db.transaction(conn, immediate=True):
+                    rule_set_id = db.get_active_rule_set_id(conn)
+                    rule_map = rules.load_rule_map(conn, rule_set_id)
+                    result_ids = db.insert_results(
                         conn, mailbox_key, message_id, uid, all_records
+                    )
+                    raw_rows = db.fetch_raw_results(
+                        conn, test_result_ids=result_ids
+                    )
+                    db.insert_unified_results(
+                        conn,
+                        rules.build_unified_rows(
+                            rule_set_id, raw_rows, rule_map
+                        ),
                     )
                     db.insert_delivery(
                         conn, mailbox_key, message_id, digest,

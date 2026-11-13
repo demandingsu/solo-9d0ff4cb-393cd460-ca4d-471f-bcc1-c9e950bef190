@@ -8,6 +8,8 @@ services:
       MAIL_USER: instrument@lab.local
       MAIL_PASSWORD: labpass
       FLAKY_FETCH_AFTER: "0"
+      # 启动时追加一封项目名/单位不统一的演示邮件（演示规则统一用）
+      MAIL_SEED_UNIFIED: "1"
     ports:
       - "10143:10143"
     volumes:
@@ -24,6 +26,9 @@ services:
     entrypoint: ["/entrypoint.sh", "api"]
     environment:
       COLLECTOR_DB: /data/collector.db
+      # 演示用：把重算放慢到肉眼可见，便于观察“重算期间采集/查询仍可用”
+      RULE_RECOMPUTE_CHUNK_SIZE: "1"
+      RULE_RECOMPUTE_PAUSE_SECONDS: "1"
     ports:
       - "8000:8000"
     volumes:
